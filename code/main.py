@@ -21,7 +21,7 @@ torch.cuda.manual_seed_all(seed)
 # Hyperparameters
 EPOCHS = 50
 LEARNING_RATE = 0.001
-HIDDEN_SIZE = 3
+HIDDEN_SIZE = int(os.getenv("HIDDEN_SIZE", "3"))
 BATCH_SIZE = 32
 
 def evaluation(model, best_model_state, best_val_acc):
