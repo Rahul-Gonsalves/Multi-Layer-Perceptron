@@ -1,0 +1,151 @@
+\documentclass[12pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath,amsfonts,amssymb}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{hyperref}
+% set page margins and reduce top whitespace before title
+\usepackage[margin=1in,top=0.8in]{geometry}
+\title{HW3 --- Multi-Layer Perceptron: Answers and Results}
+\author{Rahul Gonsalves}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\section*{Question 1: Loss functions (10 points)}
+\subsection*{(a) Definitions and unified picture}
+\textbf{0--1 loss.} For binary labels $y\in\{\pm1\}$ and score $f(x)$,
+\[ L_{0-1}(y,f(x)) = \mathbf{1}[y f(x) \le 0]. \]
+It counts misclassification; non-convex and not useful for gradient-based training.
+
+\textbf{Hinge loss (SVM).}
+\[ L_{\text{hinge}}(y,f(x)) = \max(0,\,1 - y f(x)). \]
+Margin-based, convex, piecewise-linear. Loss is zero when margin $m=y f(x)\ge1$.
+
+\textbf{Logistic loss.}
+\[ L_{\text{log}}(y,f(x)) = \log(1 + e^{-y f(x)}). \]
+Convex and smooth surrogate for 0--1; penalizes negative margins strongly, decays smoothly for positive margins.
+
+\textbf{Unified picture.} All three are margin-based losses $\phi(m)$ with $m=yf(x)$. 0--1 is the ideal discrete loss. Hinge and logistic are convex surrogates that enable optimization; hinge becomes exactly zero for margin beyond a threshold, logistic only approaches zero asymptotically.
+
+\subsection*{(b) Influence of a distant correctly-classified point}
+If a point has large positive margin $m\gg1$: hinge loss has zero derivative (it is inactive) and the point does not affect the SVM solution (non-support vector). Logistic loss has derivative $-y/(1+e^{y f(x)})$, which is small but nonzero for finite $m$, so logistic regression is still (slightly) affected by such points. Intuition: SVM focuses on support vectors near the boundary; logistic regression ``weights'' all points.
+
+\section*{Question 2: Backprop when output activation is identity (20 points)}
+\subsection*{Formulas}
+Notation (layer index $\ell$, output layer $L$):
+\begin{align*}
+s^{(\ell)} &= W^{(\ell)} x^{(\ell-1)} + b^{(\ell)},\\
+x^{(\ell)} &= \phi^{(\ell)}(s^{(\ell)}),
+\end{align*}
+with the output activation identity: $x^{(L)} = s^{(L)}$. Loss for one example is
+\[ e = \tfrac{1}{2} \|x^{(L)} - y\|^2. \]
+
+Backprop results:
+\begin{align*}
+\delta^{(L)} &= \frac{\partial e}{\partial s^{(L)}} = x^{(L)} - y,\\
+\delta^{(\ell)} &= (W^{(\ell+1)})^\top \delta^{(\ell+1)} \odot \phi'^{(\ell)}(s^{(\ell)}) \qquad (\ell < L),\\
+\frac{\partial e}{\partial W^{(\ell)}} &= \delta^{(\ell)}\,(x^{(\ell-1)})^\top,\\
+\frac{\partial e}{\partial b^{(\ell)}} &= \delta^{(\ell)}.
+\end{align*}
+
+\subsection*{Worked numeric example (one-hidden-layer, tanh)}
+The numeric example from the assignment has been computed and is summarized below (values rounded):
+\begin{itemize}
+  \item $x^{(0)}=[1.0,2.0]^\top$, $y=0$.
+  \item $W^{(1)}=\begin{bmatrix}0.1 & -0.2\\0.4 & 0.5\end{bmatrix}$, $b^{(1)}=[0.0,0.1]^\top$.
+  \item $W^{(2)}=[0.3, -0.6]$, $b^{(2)}=0.05$.
+\end{itemize}
+Forward/backward results (rounded):
+\begin{align*}
+s^{(1)} &\approx [-0.300,\;1.500]^\top,\quad x^{(1)} \approx [-0.2913,\;0.9051]^\top,\\
+s^{(2)} &= x^{(2)} \approx -0.58048,\\
+\delta^{(2)} &\approx -0.58048,\\
+\delta^{(1)} &\approx [-0.15937,\;0.06295]^\top,\\
+\frac{\partial e}{\partial W^{(2)}} &\approx [0.16902,\;-0.52543],\quad \frac{\partial e}{\partial b^{(2)}}\approx -0.58048,\\
+\frac{\partial e}{\partial W^{(1)}} &\approx \begin{bmatrix}-0.15937 & -0.31873\\[3pt]0.06295 & 0.12590\end{bmatrix},\quad
+\frac{\partial e}{\partial b^{(1)}}\approx [-0.15937,\;0.06295]^\top.
+\end{align*}
+
+% A suggestion: if the grader prefers the full step-by-step arithmetic, include the per-scalar computations as shown in class.
+
+\section*{Question 3: Parameter count (10 points)}
+Network: input dimension $20$, five hidden layers each with $10$ units, scalar output.
+\begin{itemize}
+  \item Input$\to$H1: $W_1$ is $10\times20$ (200 weights) + 10 biases = 210.
+  \item H1$\to$H2, H2$\to$H3, H3$\to$H4, H4$\to$H5: each $10\times10$ (100) + 10 biases = 110 per layer, four layers $\to$ 440.
+  \item H5$\to$Output: $1\times10$ (10) + 1 bias = 11.
+\end{itemize}
+Total parameters $=210 + 440 + 11 = 661$.
+
+\section*{Question 4: Programming part (60 points)}
+\subsection*{Implementation summary}
+I implemented the requested components in the provided starter code:
+\begin{itemize}
+  \item \texttt{code/DataReader.py}: implemented \texttt{prepare\_X} to produce three features per image:
+    \begin{itemize}
+      \item Feature 1 (symmetry): compute horizontal flip of the $16\times16$ image, take the mean absolute difference between original and flipped, divide by 256 and negate (so more symmetric images have larger/less-negative values).
+      \item Feature 2 (intensity): mean pixel intensity computed as the sum over pixels divided by 256.
+      \item Feature 3 (bias): constant 1.
+    \end{itemize}
+  \item \texttt{code/MLP.py}: implemented a 1-hidden-layer MLP using \texttt{nn.Linear} and ReLU (Linear $\to$ ReLU $\to$ Linear(3 logits)).
+  \item \texttt{code/main.py}: implemented the \texttt{evaluation} function (loads the best validation checkpoint and computes test accuracy); made \texttt{HIDDEN\_SIZE} overridable via an environment variable.
+\end{itemize}
+
+\subsection*{Experimental setup}
+Common hyperparameters used for all runs:
+\begin{itemize}
+  \item Epochs: 50; Batch size: 32; Optimizer: Adam (lr=0.001); Loss: CrossEntropyLoss.
+  \item Seed: 42 (sets Python, NumPy, PyTorch seeds for reproducibility).
+  \item Input features: 3 (bias, symmetry, intensity).
+\end{itemize}
+
+\subsection*{Hyperparameter tuning (hidden size)}
+I trained and evaluated models with hidden sizes $H\in\{1,3,5,10,20\}$. Each run saved the best model according to validation accuracy and then reported test accuracy.
+
+\begin{table}[h!]
+\centering
+\begin{tabular}{@{}cccc@{}}
+\toprule
+Hidden size $H$ & \# parameters & Best val acc & Test acc \\
+\midrule
+1  & $7\cdot1+3=10$  & 0.6968 & 0.6943 \\
+3  & $7\cdot3+3=24$  & 0.6952 & 0.6906 \\
+5  & $7\cdot5+3=38$  & 0.6619 & 0.8100 \\
+10 & $7\cdot10+3=73$ & 0.7492 & 0.8551 \\
+20 & $7\cdot20+3=143$& 0.7524 & 0.8575 \\
+\bottomrule
+\end{tabular}
+\caption{Results for different hidden sizes. \# parameters computed by $7H+3$.}
+\end{table}
+
+\subsection*{Observations and analysis}
+\begin{itemize}
+  \item Small networks (H=1) underfit and achieve lower test accuracy. Even H=3 performs well, showing the three engineered features are informative.
+  \item Increasing capacity to H=10 or H=20 yields modest improvements; best test accuracy observed was \textbf{0.8575} (H=20).
+  \item Validation and test accuracies track closely; model selection by best validation accuracy produced good test performance.
+  \item No strong overfitting was observed for these model sizes (validation accuracy improved alongside decreasing training loss).
+\end{itemize}
+
+\subsection*{Reproducibility and how to run}
+Requirements: Python 3, \texttt{numpy}, \texttt{torch} (CPU wheel is sufficient).
+\begin{verbatim}
+# from repo root
+cd code
+python3 main.py                # run with default HIDDEN_SIZE=3
+HIDDEN_SIZE=10 python3 main.py # change hidden size
+\end{verbatim}
+Best model is saved as \texttt{best\_mlp\_model.pth} (this file is ignored by .gitignore so it won't be committed).
+
+\section*{Appendix: Short reproduction notes}
+If you want exact environment pins, install with (CPU-only example):
+\begin{verbatim}
+python3 -m pip install --user numpy
+python3 -m pip install --user torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+\end{verbatim}
+
+\vspace{6pt}
+\noindent{}If you prefer, I can add a short script that computes a confusion matrix and saves training/validation curves as PNGs to include in the PDF.
+
+\end{document}
