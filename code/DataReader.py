@@ -44,47 +44,38 @@ def prepare_X(raw_X):
     """
     raw_image = raw_X.reshape((-1, 16, 16))
 
-    
     # Feature 1: Measure of Symmetry
-    ### START YOUR CODE HERE ###
-    # We'll compute horizontal symmetry: mean absolute difference
-    # between the image and its left-right flipped version.
-    # A lower value means more symmetric; we'll invert so larger -> more symmetric.
-    flipped = np.flip(raw_image, axis=2)
-    # mean absolute difference per image
-    mad = np.mean(np.abs(raw_image - flipped), axis=(1, 2))
-    # convert to a symmetry score in [0, 1] by normalizing by max possible (assuming pixel range 0-1 or 0-255)
-    # To be robust, normalize by the max observed mad (avoid division by zero)
-    max_mad = np.max(mad)
-    if max_mad == 0:
-        symmetry = np.ones_like(mad)
-    else:
-        symmetry = 1.0 - (mad / max_mad)
+    ### YOUR CODE HERE
+    # F_symmetry = -(∑|x - flip(x)|)/256
+    # Flip the entire image horizontally
+    flipped_image = np.flip(raw_image, axis=2)
+    
+    # Calculate absolute difference between original and flipped image
+    abs_diff = np.abs(raw_image - flipped_image)
+    
+    # Sum over all pixels and divide by 256, then negate
+    feature1 = -np.sum(abs_diff, axis=(1, 2)) / 256
+    ### END YOUR CODE
 
-    ### END YOUR CODE HERE ###
     # Feature 2: Measure of Intensity
-    ### YOUR CODE HERE ###
-    # Use the mean pixel intensity per image (normalized to [0,1] by dividing by max observed)
-    mean_intensity = np.mean(raw_image, axis=(1, 2))
-    max_int = np.max(mean_intensity)
-    if max_int == 0:
-        intensity = np.zeros_like(mean_intensity)
-    else:
-        intensity = mean_intensity / max_int
-    ### END YOUR CODE HERE ###
+    ### YOUR CODE HERE
+    # F_intensity = (∑x)/256 - average of pixel values
+    feature2 = np.sum(raw_image, axis=(1, 2)) / 256
+    ### END YOUR CODE
 
     # Feature 3: Bias Term. Always 1.
-    ### YOUR CODE HERE 
-    bias = np.ones((raw_image.shape[0],), dtype=float)
-
-    ### END YOUR CODE HERE 
+    ### YOUR CODE HERE
+    # Bias term - array of ones with same length as number of samples
+    feature3 = np.ones(raw_image.shape[0])
+    ### END YOUR CODE
 
     # Stack features together in the following order.
     # [Feature 3, Feature 1, Feature 2]
     ### YOUR CODE HERE
-    X = np.stack([bias, symmetry, intensity], axis=1)
-    return X
+    # Stack features column-wise: bias term, symmetry, intensity
+    X = np.column_stack((feature3, feature1, feature2))
     ### END YOUR CODE
+    return X
 
 def prepare_y(raw_y):
     """
